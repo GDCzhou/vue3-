@@ -190,13 +190,23 @@ const BSApi = {
       else if (Array.isArray(n2.children)) {
         if (Array.isArray(n1.children)) {
           // 简单的diff
-          console.log('diff');
-          console.log(JSON.stringify(n1.children))
-          console.log(JSON.stringify(n2.children))
           const oldChildren = n1.children
           const newchildren = n2.children
-          for (let i = 0; i < oldChildren.length; i++) {
-            patch(oldChildren[i], newchildren[i])
+          const oldlen = oldChildren.length
+          const newlen = newchildren.length
+          const commonLength = Math.min(oldlen, newlen)
+          for (let i = 0; i < commonLength; i++) {
+              patch(oldChildren[i], newchildren[i], container)
+            }
+          if (newlen > oldlen) {
+            for (let i = commonLength; i<newlen; i++) {
+              patch(null, newchildren[i], container)
+            }
+          }
+          else if(newlen < oldlen) {
+            for (let i = commonLength; i < oldlen; i++) {
+              unmount(oldChildren[i])
+            }
           }
         }
         else {
@@ -252,25 +262,28 @@ const BSApi = {
 const renderer = createRenderer(BSApi)
 
 const newVnode = {
-   type: 'div', 
-   children: [   
-      { type: 'p', children: '1' },
-      { type: 'p', children: '2' },
-      { type: 'p', children: '3' }
- ]
+  type: 'div',
+  children: [
+    { type: 'p', children: '1' },
+    { type: 'p', children: '2' },
+  ]
+}
+renderer.render(newVnode, document.querySelector('#app'))
+
+const oldVnode = {
+  type: 'div',
+  children: [
+    { type: 'p', children: '4' },
+    { type: 'p', children: '5' },
+    { type: 'p', children: '6' }
+  ]
 }
 
-const oldVnode = {  
-   type: 'div', 
-   children: [   
-      { type: 'p', children: '4' },
-      { type: 'p', children: '5' },
-      { type: 'p', children: '6' }
- ]
-}
+setTimeout(() => {
+  console.log('update')
+  renderer.render(oldVnode, document.querySelector('#app'))
+}, 400);
 
-renderer.render(oldVnode, document.getElementById('app'))
-renderer.render(newVnode, document.getElementById('app'))
 
 
 </script>

@@ -1,5 +1,6 @@
 <!-- 简单的diff -->
-
+<!-- key的作用2 -->
+<!-- add -->
 <div id="app"></div>
 <script src="../js/reactivity.js"  ></script>
 <script>
@@ -59,7 +60,7 @@ const BSApi = {
      * @params n2 第二次传入的vnode
      * @params n1 第一次传入的vnode或者是上次的vnode
     */
-    function patch(n1, n2, container) {
+    function patch(n1, n2, container, anchor) {
       // debugger
       if (n1 && n1.type !== n2.type) {
         unmount(n1)
@@ -69,7 +70,7 @@ const BSApi = {
       // n2.type 是string， 它就是普通的标签
       if (typeof type === "string") {
         if (!n1) {
-        mountElement(n2, container)
+        mountElement(n2, container, anchor)
         }
         else {
           patchElement(n1, n2)
@@ -82,7 +83,7 @@ const BSApi = {
         // 处理Text类型的vnode
         if (!n1) {
           const el = n2.el = createText(n2.children)
-          insert(el, container)
+          insert(el, container, anchor)
         }
         else {
           const el = n2.el = n1.el
@@ -94,7 +95,7 @@ const BSApi = {
       else if ( type === Comment) {
         if(!n1) {
           const el = n2.el = createComment(n2.children)
-          insert(el, container)
+          insert(el, container, anchor)
         }
         else {
           const el = n2.el = n1.el
@@ -164,6 +165,7 @@ const BSApi = {
     }
   
     function patchElement(n1, n2) {
+      // 引用真实dom
       const el = n2.el = n1.el
       const oldProps = n1.props
       const newProps = n2.props
@@ -190,14 +192,50 @@ const BSApi = {
       else if (Array.isArray(n2.children)) {
         if (Array.isArray(n1.children)) {
           // 简单的diff
-          console.log('diff');
-          console.log(JSON.stringify(n1.children))
-          console.log(JSON.stringify(n2.children))
           const oldChildren = n1.children
-          const newchildren = n2.children
-          for (let i = 0; i < oldChildren.length; i++) {
-            patch(oldChildren[i], newchildren[i])
+          const newChildren = n2.children
+          const oldlen = oldChildren.length
+          const newlen = newChildren.length
+          let lastIndex = 0 //最大索引
+          for (let i = 0; i < newlen; i++) {
+            const newVnode = newChildren[i]
+            let find = false // newChildren在old中有没有
+            for (let j=0; j < oldlen; j++) {
+              const oldVnode = oldChildren[j]
+              if (newVnode.key === oldVnode.key) {
+                find = true
+                patch(oldVnode, newVnode, container)
+                // 小于最大索引，则需要移动
+                if (j < lastIndex) {
+                  const prevVnode = newChildren[i - 1]
+                  if (prevVnode) {
+                    const anchor = prevVnode.el.nextSibling
+                    // 将newvnode插入到anchor之前
+                    insert(newVnode.el, container, anchor)
+                  }
+                }
+                else {
+                  lastIndex = j
+                }
+                break
+              }
+            }
+            // 没找到
+            if (!find) {
+                const preVnode = newChildren[i - 1]
+                let anchor = null
+                if (preVnode) {
+                  //如果有前一个 vnode 节点，则使用它的下一个兄弟节点作为参考
+                  anchor = preVnode.el.nextSibling
+                  console.log(anchor,preVnode.el.previousSibling);
+                }
+                else {
+                  anchor = container.firstChild
+                }
+                patch(null, newVnode, container, anchor)
+              }
           }
+
         }
         else {
           setElementText(container, '')
@@ -226,7 +264,7 @@ const BSApi = {
       }
     }
 
-    function mountElement(vnode, container) {
+    function mountElement(vnode, container, anchor) {
       // 在vnode属性上挂载一个真实dom
       const el = vnode.el = createElement(vnode.type)
       if (typeof vnode.children === 'string') {
@@ -242,7 +280,7 @@ const BSApi = {
           patchProps(el, key, null, vnode.props[key])
         }
       }
-      insert(el, container)
+      insert(el, container, anchor)
     }
     return {
       render
@@ -251,26 +289,32 @@ const BSApi = {
 
 const renderer = createRenderer(BSApi)
 
+const oldVnode = {
+  type: 'div',
+  children: [
+    { type: 'p', children: '1', key: 1 },
+    { type: 'p', children: '2', key: 2},
+    { type: 'p', children: 'hello', key: 3 },
+  ]
+}
 const newVnode = {
-   type: 'div', 
-   children: [   
-      { type: 'p', children: '1' },
-      { type: 'p', children: '2' },
-      { type: 'p', children: '3' }
- ]
+  type: 'div',
+  children: [
+    { type: 'p', children: 'world', key: 3 },
+    { type: 'p', children: '1', key: 1},
+    { type: 'p', children: 'new', key: 4},
+    { type: 'p', children: '2', key: 2 }
+  ]
 }
+renderer.render(oldVnode, document.querySelector('#app'))
 
-const oldVnode = {  
-   type: 'div', 
-   children: [   
-      { type: 'p', children: '4' },
-      { type: 'p', children: '5' },
-      { type: 'p', children: '6' }
- ]
-}
 
-renderer.render(oldVnode, document.getElementById('app'))
-renderer.render(newVnode, document.getElementById('app'))
+
+setTimeout(() => {
+  console.log('update')
+  renderer.render(newVnode, document.querySelector('#app'))
+}, 1000);
+
 
 
 </script>

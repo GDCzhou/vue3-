@@ -1,4 +1,5 @@
 <!-- 简单的diff -->
+<!-- key的作用 -->
 
 <div id="app"></div>
 <script src="../js/reactivity.js"  ></script>
@@ -190,14 +191,21 @@ const BSApi = {
       else if (Array.isArray(n2.children)) {
         if (Array.isArray(n1.children)) {
           // 简单的diff
-          console.log('diff');
-          console.log(JSON.stringify(n1.children))
-          console.log(JSON.stringify(n2.children))
           const oldChildren = n1.children
           const newchildren = n2.children
-          for (let i = 0; i < oldChildren.length; i++) {
-            patch(oldChildren[i], newchildren[i])
+          const oldlen = oldChildren.length
+          const newlen = newchildren.length
+          for (let i = 0; i < newlen; i++) {
+            const newVnode = newchildren[i]
+            for (let j=0; j < oldlen; j++) {
+              const oldVnode = oldChildren[j]
+              if (newVnode.key === oldVnode.key) {
+                patch(oldVnode, newVnode, container)
+                break
+              }
+            }
           }
+
         }
         else {
           setElementText(container, '')
@@ -252,25 +260,29 @@ const BSApi = {
 const renderer = createRenderer(BSApi)
 
 const newVnode = {
-   type: 'div', 
-   children: [   
-      { type: 'p', children: '1' },
-      { type: 'p', children: '2' },
-      { type: 'p', children: '3' }
- ]
+  type: 'div',
+  children: [
+    { type: 'p', children: '1', key: 1 },
+    { type: 'p', children: '2', key: 2},
+    { type: 'p', children: 'hello', key: 3 },
+  ]
+}
+renderer.render(newVnode, document.querySelector('#app'))
+
+const oldVnode = {
+  type: 'div',
+  children: [
+    { type: 'p', children: 'world', key: 3 },
+    { type: 'p', children: '1', key: 1},
+    { type: 'p', children: '2', key: 2 }
+  ]
 }
 
-const oldVnode = {  
-   type: 'div', 
-   children: [   
-      { type: 'p', children: '4' },
-      { type: 'p', children: '5' },
-      { type: 'p', children: '6' }
- ]
-}
+setTimeout(() => {
+  console.log('update')
+  renderer.render(oldVnode, document.querySelector('#app'))
+}, 1000);
 
-renderer.render(oldVnode, document.getElementById('app'))
-renderer.render(newVnode, document.getElementById('app'))
 
 
 </script>
