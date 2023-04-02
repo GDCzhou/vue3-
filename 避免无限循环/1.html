@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      let activeEffect
+
+      const hanlder = {
+        get(target, key) {
+          track(target, key)
+          return target[key]
+        },
+        set(target, key, newValue) {
+          target[key] = newValue
+          trigger(target, key)
+        },
+      }
+
+      const bucket = new WeakMap()
+
+      const track = (target, key) => {
+        let depsMap = bucket.get(target)
+        if (!depsMap) {
+          depsMap = new Map()
+          bucket.set(target, depsMap)
+        }
+        let deps = depsMap.get(key)
+        if (!deps) {
+          deps = new Set()
+          depsMap.set(key, deps)
+        }
+        deps.add(activeEffect)
+        activeEffect.deps.push(deps)
+      }
+
+      const trigger = (target, key) => {
+        let depsMap = bucket.get(target)
+        if (!depsMap) return
+        let effects = depsMap.get(key)
+        const effectsToRun = new Set()
+        //避免无限循环
+        effects.forEach(effectFn => {
+          if (effectFn !== activeEffect) {
+            effectsToRun.add(effectFn)
+          }
+        })
+      
+        effectsToRun.forEach((fn) => fn())
+        // effects && effects.forEach((fn) => fn())
+      }
+
+      const effectStack = []
+
+      function effect(fn) {
+        const effectFn = () => {
+          cleanup(effectFn)
+          activeEffect = effectFn
+          effectStack.push(effectFn)
+          fn()
+          effectStack.pop()
+          activeEffect = effectStack[effectStack.length - 1]
+        }
+        effectFn.deps = []
+        effectFn()
+      }
+
+      function cleanup(effectFn) {
+        for (let i = 0; i < effectFn.deps.length; i++) {
+          let deps = effectFn.deps[i]
+          deps.delete(effectFn)
+        }
+        effectFn.deps.length = 0
+      }
+
+      // const data = {
+      //   text: 'hello world',
+      //   ok: true,
+      // }
+
+      // const obj = new Proxy(data, hanlder)
+
+      // effect( () => {
+      //   console.log('effect run...');
+      //   document.body.innerText = obj.ok ? obj.text : 'not'
+      // })
+
+      // obj.ok = false
+
+      const data = {
+        foo: 1
+      }
+      const obj = new Proxy(data, hanlder)
+      let temp1, temp2
+
+      effect(function effectFn1() {
+        console.log(99);
+        obj.foo++
+      }
+      )
+    </script>
+  </body>
+</html>

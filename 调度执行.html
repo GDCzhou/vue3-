@@ -1,0 +1,153 @@
+<body>
+  <script>
+    let activeEffect
+
+    const hanlder = {
+      get(target, key) {
+        track(target, key)
+        return target[key]
+      },
+      set(target, key, newValue) {
+        target[key] = newValue
+        trigger(target, key)
+      },
+    }
+
+    const bucket = new WeakMap()
+
+    const track = (target, key) => {
+      if (!activeEffect) return
+      let depsMap = bucket.get(target)
+      if (!depsMap) {
+        depsMap = new Map()
+        bucket.set(target, depsMap)
+      }
+      let deps = depsMap.get(key)
+      if (!deps) {
+        deps = new Set()
+        depsMap.set(key, deps)
+      }
+      deps.add(activeEffect)
+      activeEffect.deps.push(deps)
+    }
+
+    const trigger = (target, key) => {
+      let depsMap = bucket.get(target)
+      if (!depsMap) return
+      let effects = depsMap.get(key)
+      const effectsToRun = new Set()
+      //避免无限循环
+      effects && effects.forEach((effectFn) => {
+        if (effectFn !== activeEffect) {
+          effectsToRun.add(effectFn)
+        }
+      })
+
+      effectsToRun.forEach((fn) => {
+        if(fn.options.scheduler) {
+          fn.options.scheduler(fn)
+        }else {
+          fn()
+        }
+      })
+    }
+
+    const effectStack = []
+
+    function effect(fn, options = {}) {
+      const effectFn = () => {
+        cleanup(effectFn)
+        activeEffect = effectFn
+        effectStack.push(effectFn)
+        fn()
+        effectStack.pop()
+        activeEffect = effectStack[effectStack.length - 1]
+      }
+      effectFn.deps = []
+      effectFn.options = options
+      effectFn()
+      console.log(activeEffect)
+    }
+
+    function cleanup(effectFn) {
+      for (let i = 0; i < effectFn.deps.length; i++) {
+        let deps = effectFn.deps[i]
+        deps.delete(effectFn)
+      }
+      effectFn.deps.length = 0
+    }
+
+    const data = {
+      foo: 1,
+    }
+    const obj = new Proxy(data, hanlder)
+    //--正常情况
+    // effect(()=>{
+    //   console.log(obj.foo);
+    // })
+    // // debugger
+    // obj.foo++
+    // obj.foo++
+
+    //--实现调度
+    // effect(() => {
+    //   console.log(obj.foo)
+    // },{
+    //   scheduler(fn) {
+    //     setTimeout(fn);
+    //   }
+    // })
+    // obj.foo++
+    // console.log('结束了');
+
+    //--实现连续自增，只打印最后结果
+    // const jobQueue = new Set()
+    // const p = Promise.resolve()
+    // let isFlushing = false
+
+    // function flushJob() {
+    //   if (isFlushing) return
+    //   isFlushing = true
+    //   p.then(()=> {
+    //     jobQueue.forEach(job=>job())
+    //   }).finally(()=>{
+    //     isFlushing = false
+    //   })
+    // }
+    // effect(()=>{
+    //   console.log(obj.foo);
+    // }, {
+    //   scheduler(fn) {
+    //     jobQueue.add(fn)
+    //     flushJob()
+    //   }
+    // })
+    // obj.foo++
+    // obj.foo++
+
+    const jobQueue = new Set()
+    let isFlushing = false
+    const p = Promise.resolve()
+    function queneJob() {
+      if (isFlushing) return
+      isFlushing = true
+      p.then(()=>{
+        jobQueue.forEach(job => job())
+      }).finally(()=> {
+        isFlushing = false
+      })
+    }
+
+    effect(()=>{
+      console.log(obj.foo)
+    },{
+      scheduer(fn) {
+        jobQueue.add(fn)
+        queneJob()
+      }
+    })
+    obj.foo++
+    obj.foo++
+
+</script>
+</body>

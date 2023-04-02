@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script src="render.js" async></script>
+    <script src="render2.js" async></script>
+  </head>
+  <body></body>
+
+  <script>
+    const html = `
+  <div><span>vue</span></div>
+  `
+    document.body.innerHTML = html
+  </script>
+  <script>
+    function foo() {
+      console.log(1);
+    }
+    const lo = typeof foo
+    console.log(typeof foo === 'object');
+  </script>
+</html>

@@ -1,0 +1,21 @@
+<div id="app"></div>
+<script src="./reactivity.js"  ></script>
+<script>
+  const { ref, effect }= VueReactivity
+  // 渲染器 renderer
+  function renderer(dostring, container) {
+    container.innerHTML = dostring
+  }
+
+  const count = ref(1)
+  effect(() => {
+    renderer(
+      `
+      <h1>${count.value}</h1>
+      `,
+      document.getElementById('app')
+
+    )
+  })
+  count.value++
+</script>

@@ -1,0 +1,178 @@
+<body>
+  <script>
+    let activeEffect
+
+    const hanlder = {
+      get(target, key) {
+        track(target, key)
+        return target[key]
+      },
+      set(target, key, newValue) {
+        target[key] = newValue
+        trigger(target, key)
+      },
+    }
+
+    const bucket = new WeakMap()
+
+    const track = (target, key) => {
+      if (!activeEffect) return
+      let depsMap = bucket.get(target)
+      if (!depsMap) {
+        depsMap = new Map()
+        bucket.set(target, depsMap)
+      }
+      let deps = depsMap.get(key)
+      if (!deps) {
+        deps = new Set()
+        depsMap.set(key, deps)
+      }
+      deps.add(activeEffect)
+      activeEffect.deps.push(deps)
+    }
+
+    const trigger = (target, key) => {
+      let depsMap = bucket.get(target)
+      if (!depsMap) return
+      let effects = depsMap.get(key)
+      const effectsToRun = new Set()
+      //避免无限循环
+      effects &&
+        effects.forEach((effectFn) => {
+          if (effectFn !== activeEffect) {
+            effectsToRun.add(effectFn)
+          }
+        })
+
+      effectsToRun.forEach((fn) => {
+        if (fn.options.scheduler) {
+          fn.options.scheduler(fn)
+        } else {
+          fn()
+        }
+      })
+    }
+
+    const effectStack = []
+
+    function effect(fn, options = {}) {
+      const effectFn = () => {
+        cleanup(effectFn)
+        activeEffect = effectFn
+        effectStack.push(effectFn)
+        fn()
+        const res = fn()
+        effectStack.pop()
+        activeEffect = effectStack[effectStack.length - 1]
+        return res
+      }
+      effectFn.deps = []
+      effectFn.options = options
+      if (!options.lazy) {
+        effectFn()
+      }
+      return effectFn
+    }
+
+    function cleanup(effectFn) {
+      for (let i = 0; i < effectFn.deps.length; i++) {
+        let deps = effectFn.deps[i]
+        deps.delete(effectFn)
+      }
+      effectFn.deps.length = 0
+    }
+
+    function computed(getter) {
+      let value
+      let dirty = true
+      const effectFn = effect(getter, {
+        lazy: true,
+        scheduler(fn) {
+          if (!dirty) {
+            dirty = true
+            trigger(obj, 'value')
+          }
+        },
+      })
+      const obj = {
+        get value() {
+          if (dirty) {
+            value = effectFn()
+            dirty = false
+          }
+          //当值被读取重新收集依赖
+          track(obj, 'value')
+          return value
+        },
+      }
+      return obj
+    }
+
+    function watch(source, cb, options = {}) {
+      let getter
+      if (typeof source === 'function') {
+        getter = source
+      } else {
+        getter = () => traverse(source)
+      }
+      let oldValue, newValue
+      const job = () => {
+          newValue = effectFn()
+          cb(oldValue, newValue)
+          oldValue = newValue
+      }
+      const effectFn = effect(
+        () => getter(), 
+        {
+        lazy: true,
+        scheduler: () => {
+          //延迟执行
+          if (options.flush === 'post') {
+            const p = Promise.resolve()
+            p.then(job)
+          }else {
+            job()
+          }
+        },
+      })
+      if (options.immediate) {
+        job()
+      }else {
+        oldValue = effectFn()
+      }
+    }
+
+    function traverse(value, seen = new Set()) {
+      if (typeof value !== 'object' || value == null || seen.has(value)) return
+      seen.add(value)
+      for (const k in value) {
+        traverse(value[k], seen)
+      }
+      return value
+    }
+
+    const data = {
+      foo: 1,
+      bar: 2,
+    }
+    const obj = new Proxy(data, hanlder)
+    // watch(obj, () => {
+    //   console.log('变化了', obj.foo)
+    // })
+    // obj.foo++
+    // obj.foo++
+    // obj.foo++
+    // watch(()=> obj.bar, () => {
+    //   console.log('bar被检测变化');
+    // })
+    // obj.foo++
+
+    watch(
+      () => obj.foo,
+      (oldValue, newValue) => {
+        console.log(oldValue, newValue)
+      }
+    )
+    obj.foo++
+  </script>
+</body>

@@ -1,0 +1,158 @@
+<!-- 卸载处理-->
+
+<div id="app"></div>
+<script src="./reactivity.js"  ></script>
+<script>
+  const BSApi = {
+    createElement(tag) {
+      return document.createElement(tag)
+    },
+    setElementText(el, text) {
+      el.textContent = text
+    },
+    insert(el, parent, anchor = null) {
+      parent.insertBefore(el, anchor)
+    }
+  }
+  function shouldSetAsProps(el, key, value) {
+    if (key === 'form' && el.tagName === 'INPUT') return false
+    return key in el
+  }
+
+  function createRenderer(options) {
+    const { createElement, insert, setElementText }  = options
+    function render(vnode,container) {
+      // 挂载
+      if (vnode) {
+        patch(container._vnode, vnode, container)
+      }
+      // 卸载
+      else {
+        if (container._vnode) {
+          unmount(container._vnode)
+        }
+      }
+      // children vnode
+      container._vnode = vnode
+    }
+    /**
+     * @params n2 第二次传入的vnode
+     * @params n1 第一次传入的vnode或者是上次的vnode
+    */
+    function patch(n1, n2, container) {
+      if (n1 && n1.type !== n2.type) {
+        unmount(n1)
+        n1 = null
+      }
+      const { type } = n2
+      // n2.type 是string， 它就是普通的标签
+      if (typeof type === "string") {
+        if (!n1) {
+        mountElement(n2, container)
+        }
+        else {
+          patchElement(n1, n2)
+        }
+      }
+      else if (typeof type === 'object') {
+        // 处理组件
+      }
+      else if (typeof type === 'xxx') {
+        // 处理其它类型的vnode
+      }
+
+    }
+
+    function patchProps(el, key, prevValue, nextValue) { 
+      /** 对class进行处理 性能优化 */
+      if (key === 'class') {
+        el.className = nextValue || ''
+      }
+      else if (shouldSetAsProps(el, key, nextValue)) {
+        const type = typeof el[key]
+        if (type ==="boolean" && nextValue === '') {
+        el[key] = true
+        }
+        else {
+       
+          el[key] = nextValue
+        }
+      }
+      else {
+        el.setAttribute(key, nextValue)
+      }
+    }
+    // todo
+    function patchElement(n1, n2) {
+      
+    }
+    function unmount(vnode) {
+      const parent = vnode.el.parentNode
+      if (parent) {
+        parent.removeChild(vnode.el)
+      }
+    }
+    function mountElement(vnode, container) {
+      // 在vnode属性上挂载一个真实dom
+      const el = vnode.el = createElement(vnode.type)
+      if (typeof vnode.children === 'string') {
+        setElementText(el, vnode.children)
+      } 
+      else if (Array.isArray(vnode.children)) {
+        vnode.children.forEach(child => {
+          patch(null, child, el)
+        })
+      }
+      if (vnode.props) {
+        for (const key in vnode.props) {
+          patchProps(el, key, null, vnode.props[key])
+        }
+      }
+      insert(el, container)
+    }
+    return {
+      render
+    }
+  }
+
+  const vnode = {
+    type: 'div',
+    props: {
+      id: 'foo'
+    },
+    children: [
+      {
+        type: 'p',
+        children: 'hello',
+        props: {
+          id: 'bar'
+        }
+      },{
+        type: 'form',
+        props: {
+          id: 'form1',
+        }
+      },{
+        type: 'input',
+        props: {
+          form: 'from1'
+        }
+      },{
+        type: 'button',
+        props: {
+          disabled: '',
+          /** 用normalizeClass对各种格式序列化 */
+          // class: normalizeClass([
+          //   'foo bar', {baz: true}
+          // ])
+          /** 序列化后的格式 */
+          class: 'foo bar baz'
+        },
+        children: 'button'
+      }
+    ]
+  }
+  const renderer = createRenderer(BSApi)
+  const app = document.getElementById('app')
+  renderer.render(vnode, app)
+</script>

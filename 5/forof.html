@@ -1,0 +1,342 @@
+<body>
+  <script>
+    let activeEffect
+
+    const bucket = new WeakMap()
+
+    //ownKeys的唯一标识
+    const ITERATE_KEY = Symbol()
+
+    const hanlder = {
+      get(target, key, receiver) {
+        if (key === 'raw') {
+          return target
+        }
+        const res = Reflect.get(target, key, receiver)
+        track(target, key)
+        return res
+      },
+      set(target, key, newValue, receiver) {
+        // console.log(receiver);
+        const oldValue = target[key]
+        // target[key] = newValue
+        //设置type类型，当为添加key时，触发effect函数
+        const type = Object.prototype.hasOwnProperty.call(target, key)
+          ? 'SET'
+          : 'ADD'
+        const res = Reflect.set(target, key, newValue, receiver)
+
+        //比较新值与旧值，只有当它们不全等，并且不都是 NaN 的时候才触发响应
+        if (
+          oldValue !== newValue &&
+          (oldValue === oldValue || newValue === newValue)
+        ) {
+          trigger(target, key, type)
+        }
+
+        return res
+      },
+      // 对in操作符拦截
+      has(target, key) {
+        console.log('触发in')
+        track(target, key)
+        return Reflect.has(target, key)
+      },
+      //对for..in拦截
+      ownKeys(target) {
+        console.log('触发for..in')
+        track(target, ITERATE_KEY)
+        return Reflect.ownKeys(target)
+      },
+      deleteProperty(target, key) {
+        // 检查是否是自己对象上的属性
+        const hadKey = Object.prototype.hasOwnProperty.call(target, key)
+        //使用Reflect删除
+        const res = Reflect.deleteProperty(target, key)
+        if (res && hadKey) {
+          trigger(target, key, 'DELETE')
+        }
+        return res
+      },
+    }
+
+    const effectStack = []
+
+    function effect(fn, options = {}) {
+      const effectFn = () => {
+        cleanup(effectFn)
+        activeEffect = effectFn
+        effectStack.push(effectFn)
+        const res = fn()
+        effectStack.pop()
+        activeEffect = effectStack[effectStack.length - 1]
+        return res
+      }
+      effectFn.deps = []
+      effectFn.options = options
+      if (!options.lazy) {
+        effectFn()
+      }
+      return effectFn
+    }
+
+    function cleanup(effectFn) {
+      for (let i = 0; i < effectFn.deps.length; i++) {
+        let deps = effectFn.deps[i]
+        deps.delete(effectFn)
+      }
+      effectFn.deps.length = 0
+    }
+
+    function computed(getter) {
+      let value
+      let dirty = true
+      const effectFn = effect(getter, {
+        lazy: true,
+        scheduler(fn) {
+          if (!dirty) {
+            dirty = true
+            trigger(obj, 'value')
+          }
+        },
+      })
+      const obj = {
+        get value() {
+          if (dirty) {
+            value = effectFn()
+            dirty = false
+          }
+          //当值被读取重新收集依赖
+          track(obj, 'value')
+          return value
+        },
+      }
+      return obj
+    }
+
+    function watch(source, cb, options = {}) {
+      let getter
+      if (typeof source === 'function') {
+        getter = source
+      } else {
+        getter = () => traverse(source)
+      }
+      let oldValue, newValue
+      const job = () => {
+        newValue = effectFn()
+        cb(oldValue, newValue)
+        oldValue = newValue
+      }
+      const effectFn = effect(() => getter(), {
+        lazy: true,
+        scheduler: () => {
+          //延迟执行
+          if (options.flush === 'post') {
+            const p = Promise.resolve()
+            p.then(job)
+          } else {
+            job()
+          }
+        },
+      })
+      if (options.immediate) {
+        job()
+      } else {
+        oldValue = effectFn()
+      }
+    }
+
+    function traverse(value, seen = new Set()) {
+      if (typeof value !== 'object' || value == null || seen.has(value)) return
+      seen.add(value)
+      for (const k in value) {
+        traverse(value[k], seen)
+      }
+      return value
+    }
+
+    const track = (target, key) => {
+      if (!activeEffect) return
+      let depsMap = bucket.get(target)
+      if (!depsMap) {
+        depsMap = new Map()
+        bucket.set(target, depsMap)
+      }
+      let deps = depsMap.get(key)
+      if (!deps) {
+        deps = new Set()
+        depsMap.set(key, deps)
+      }
+      deps.add(activeEffect)
+      activeEffect.deps.push(deps)
+    }
+
+    const trigger = (target, key, type, newValue) => {
+      let depsMap = bucket.get(target)
+      if (!depsMap) return
+      const effects = depsMap.get(key)
+      const effectsToRun = new Set()
+
+      //将与ITERATE_KE有关的effect函数添加到effecttToRun
+      if (type === 'ADD' || type === 'DELETE') {
+        //取得与ITERATE_KE相关的effect函数
+        const iterateEffects = depsMap.get(ITERATE_KEY)
+        iterateEffects &&
+          iterateEffects.forEach((effectFn) => {
+            if (effectFn !== activeEffect) {
+              effectsToRun.add(effectFn)
+            }
+          })
+      }
+      //对数组处理,length相关的副作用函数
+      if (type === 'ADD' && Array.isArray(target)) {
+        const arrayEffects = depsMap.get('length')
+        arrayEffects &&
+          arrayEffects.forEach((effectFn) => {
+            if (effectFn !== activeEffect) {
+              effectsToRun.add(effectFn)
+            }
+          })
+      }
+
+      if (Array.isArray(target) && key === 'length') {
+        depsMap.forEach((effects, key) => {
+          if (key >= newValue) {
+            effects &&
+              effects.forEach((effectFn) => {
+                if (effectFn !== activeEffect) {
+                  effectsToRun.add(effectFn)
+                }
+              })
+          }
+        })
+      }
+
+      //避免无限循环
+      effects &&
+        effects.forEach((effectFn) => {
+          if (effectFn !== activeEffect) {
+            effectsToRun.add(effectFn)
+          }
+        })
+
+      effectsToRun.forEach((fn) => {
+        if (fn.options.scheduler) {
+          fn.options.scheduler(fn)
+        } else {
+          fn()
+        }
+      })
+    }
+
+    function createReactive(obj, isShallow = false, isReadonly = false) {
+      return new Proxy(obj, {
+        get(target, key, receiver) {
+          console.log('get:', key)
+          if (key === 'raw') {
+            return target
+          }
+
+          const res = Reflect.get(target, key, receiver)
+          //for ... of 不对symbol收集依赖
+          if (!isReadonly && typeof key !=="symbol") {
+            track(target, key)
+          }
+          //浅响应
+          if (isShallow) {
+            return res
+          }
+          //深响应关键代码
+          if (typeof res === 'object' && res !== null) {
+            //深只读，如果是只读的，用readonly进行包装
+            return isReadonly ? readonly(res) : reactive(res)
+          }
+          return res
+        },
+        set(target, key, newValue, receiver) {
+          if (isReadonly) {
+            return console.warn(`属性${key}是只读的`)
+          }
+          // console.log(receiver);
+          const oldValue = target[key]
+          // target[key] = newValue
+          //设置type类型，当为添加key时，触发effect函数
+
+          const type = Array.isArray(target)
+            ? Number(key) < target.length
+              ? 'SET'
+              : 'ADD'
+            : Object.prototype.hasOwnProperty.call(target, key)
+            ? 'SET'
+            : 'ADD'
+          const res = Reflect.set(target, key, newValue, receiver)
+
+          if (target === receiver.raw) {
+            //比较新值与旧值，只有当它们不全等，并且不都是 NaN 的时候才触发响应
+            if (
+              oldValue !== newValue &&
+              (oldValue === oldValue || newValue === newValue)
+            ) {
+              trigger(target, key, type, newValue)
+            }
+          }
+
+          return res
+        },
+        // 对in操作符拦截
+        has(target, key) {
+          console.log('触发in')
+          track(target, key)
+          return Reflect.has(target, key)
+        },
+        //对for..in拦截
+        ownKeys(target) {
+          console.log('触发for..in')
+          track(target, Array.isArray(target) ? 'length' : ITERATE_KEY)
+          return Reflect.ownKeys(target)
+        },
+        deleteProperty(target, key) {
+          if (isReadonly) {
+            return console.warn(`属性${key}是只读的`)
+          }
+          // 检查是否是自己对象上的属性
+          const hadKey = Object.prototype.hasOwnProperty.call(target, key)
+          //使用Reflect删除
+          const res = Reflect.deleteProperty(target, key)
+          if (res && hadKey) {
+            trigger(target, key, 'DELETE')
+          }
+          return res
+        },
+      })
+    }
+    //深
+    function reactive(obj) {
+      return createReactive(obj)
+    }
+    function shallowReactve(obj) {
+      return createReactive(obj, true)
+    }
+    function readonly(obj) {
+      return createReactive(obj, false, true)
+    }
+    function shallowReadonly(obj) {
+      return createReactive(obj, true, true)
+    }
+
+    const arr = reactive([1, 2, 3, 4, 5])
+    // effect(() => {
+    //   console.log(arr[0])
+    // })
+    // arr.length = 0
+
+    //for ... in
+    effect(() => {
+      for (const val of arr.keys()) {
+        console.log(val)
+      }
+    })
+    arr[1] = 'foo'
+    arr.length = 0
+  </script>
+</body>

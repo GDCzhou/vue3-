@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <script>
+      function createRenderer(options) {
+        const { createElement, setElementText, insert, patchProps } = options
+        function shouldSetAsProps(el, key, value) {
+          if (el.tagName === 'INPUT' && key === 'form') return
+          return key in value
+        }
+
+        function patch(n1, n2, container) {
+          if (n1 && n1.type !== n2.type) {
+            unmount(n1)
+            n1 = null
+          }
+          const type = n2.type
+          if (typeof type === 'string') {
+            if (!n1) {
+              mountElement(n2, container)
+            } else {
+              patchElement(n1, n2)
+            }
+          } else if (typeof type === 'object') {
+          } else if (typeof type === 'xxx') {
+          }
+        }
+        function unmount(vnode) {
+          const parent = vnode.parentNode
+          if (parent) {
+            parent.removeChild(child)
+          }
+        }
+
+        function render(vnode, container) {
+          if (vnode) {
+            patch(container._vnode, vnode, container)
+          } else if (container._vnode) {
+            //获取真实dom
+            const dom = container._vnode.el
+            //卸载
+            unmount(dom)
+          }
+          container._vnode = vnode
+        }
+
+        function mountElement(vnode, container) {
+          const el = (vnode.el = createElement(vnode.type))
+          if (typeof vnode.children === 'string') {
+            setElementText(el, vnode.children)
+          } else if (Array.isArray(vnode.children)) {
+            patch(null, vnode, el)
+          }
+          //处理props
+          if (vnode.props) {
+            for (key in vnode.props) {
+              if (key in el) {
+                const value = vnode.props[key]
+                patchProps(el, key, null, value)
+              } else {
+                el.setAttribute(key, vnode.props[key])
+              }
+            }
+            insert(el, container)
+          }
+        }
+        return {
+          render,
+        }
+      }
+
+      const renderer = createRenderer({
+        createElement(tag) {
+          return document.createElement(tag)
+        },
+        setElementText(el, text) {
+          el.textContent = text
+        },
+        insert(el, parent, anchol = null) {
+          parent.insertBefore(el, anchol)
+        },
+        patchProps(el, key, prevValue, nextValue) {
+          if (/^on/.test(key)) {
+            const name = key.slice(2).toLowerCase()
+            let invokers = el._vei
+            if (nextValue) {
+              if (!invokers) {
+                invokers = (e) => {
+                  invokers.value(e)
+                }
+                invokers.value = nextValue
+                el.addEventListener(name, invokers)
+              } else {
+                invokers.value = nextValue
+              }
+            } else if (invokers){
+              el.removeEventListener(name, invokers)
+            }
+
+            prevValue && el.removeEventListener(name, prevValue)
+          } else if (key === 'class') {
+          } else if (shouldSetAsProps(el, key, nextValue)) {
+            const type = typeof el
+            if (type === 'boolean' && nextValue === '') {
+              el[key] = true
+            } else {
+              el[key] = nextValue
+            }
+          }
+        },
+      })
+
+      const vnode = {
+        type: 'div',
+        children: [
+          {
+            type: 'p',
+            children: 'p tag',
+          },
+        ],
+        props: {
+          id: '#app',
+        },
+      }
+    </script>
+  </body>
+</html>
