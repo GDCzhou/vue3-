@@ -1,6 +1,5 @@
 <!-- 简单的diff -->
-<!-- key的作用2 -->
-<!-- delete -->
+
 <div id="app"></div>
 <script src="../js/reactivity.js"  ></script>
 <script>
@@ -192,58 +191,54 @@ const BSApi = {
       else if (Array.isArray(n2.children)) {
         if (Array.isArray(n1.children)) {
           // 简单的diff
-          const oldChildren = n1.children
           const newChildren = n2.children
-          const oldlen = oldChildren.length
-          const newlen = newChildren.length
-          let lastIndex = 0 //最大索引
-          for (let i = 0; i < newlen; i++) {
+          const oldChildren = n1.children
+          let maxIndex = 0
+          for (let i = 0; i < newChildren.length; i++) {
             const newVnode = newChildren[i]
-            let find = false // newChildren在old中有没有
-            for (let j=0; j < oldlen; j++) {
+            let isFind = false
+            for (let j = 0; j < oldChildren.length; j++) {
               const oldVnode = oldChildren[j]
-              if (newVnode.key === oldVnode.key) {
-                find = true
+              if (newVnode.key === oldChildren.key) {
+                isFind = true
                 patch(oldVnode, newVnode, container)
-                // 小于最大索引，则需要移动
-                if (j < lastIndex) {
-                  const prevVnode = newChildren[i - 1]
-                  if (prevVnode) {
-                    const anchor = prevVnode.el.nextSibling
-                    // 将newvnode插入到anchor之前
-                    insert(newVnode.el, container, anchor)
-                  }
-                }
-                else {
-                  lastIndex = j
-                }
-                break
               }
-            }
-            // 没找到
-            if (!find) {
-                const preVnode = newChildren[i - 1]
+              // 移动
+              if (j < maxIndex) {
+                const prevVnode = newChildren[i - 1]
                 let anchor = null
-                if (preVnode) {
-                  //如果有前一个 vnode 节点，则使用它的下一个兄弟节点作为参考
-                  anchor = preVnode.el.nextSibling
-                  console.log(anchor,preVnode.el.previousSibling);
+                if (prevVnode) {
+                  anchor = prevVnode.el.nextSibling
                 }
-                else {
-                  anchor = container.firstChild
-                }
-                patch(null, newVnode, container, anchor)
+                console.log(newVnode.el);
+                insert(newVnode.el, container, anchor)
               }
-          }
-          // delete
-          for (let i = 0; i<newlen; i++) {
-            const oldVnode = oldChildren[i]
-            const has = newChildren.find(vnode => vnode.key === oldVnode.key)
-            if (!has) {
-              unmount(oldVnode)
+              else {
+                maxIndex = j
+              }
+              break
+            }
+            // add
+            if (!isFind) {
+              const prevVnode = newChildren[i - 1]
+              let anchor = null
+              if (prevVnode) {
+                anchor = prevVnode.el.nextSibling
+              }
+              else {
+                anchor = container.firstChild
+              }
+              patch(null, newVnode, container, anchor)
             }
           }
-
+          // del
+          for (let i = 0; i < oldChildren.length; i++) {
+              const oldVnode = oldChildren[i]
+              const isFind = newChildren.find(vnode => vnode.key === oldVnode.key)
+              if (!isFind) {
+                unmount(oldVnode)
+              }
+          }
         }
         else {
           setElementText(container, '')
