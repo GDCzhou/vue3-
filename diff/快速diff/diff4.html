@@ -1,6 +1,5 @@
-<!-- 简单的diff -->
-<!-- key的作用2 -->
-<!-- delete -->
+<!-- 算法优化 -->
+<!-- hashmap 空间换时间将O^2 -> O -->
 <div id="app"></div>
 <script src="../../js/reactivity.js"  ></script>
 <script>
@@ -291,18 +290,25 @@ const BSApi = {
       soure.fill(-1)
       const oldStart = j
       const newStart = j
-      for (let i = oldstart; i<= oldEnd; i++) {
-        const oldVnode = oldChildren[i]
-        for (let k = newStart; k<=newEnd; k++) {
-          const newVnode = newChildren[k]
-          if (oldVnode.key === newVnode.key) {
-            // 打补丁
-            patch(oldVnode, newVnode, container)
-            source[k - newStart] = i
-          }
+      // hashmap key => index
+      const indexMap = {}
+      for (let i = newStart; i < newEnd;i++) {
+        const newVnode = newChildren[i]
+        indexMap[newVnode.key] = i
+      }
+      for (let i = oldStart; i < oldEnd; i++) {
+          oldVnode = oldChildren[i]
+          const k = indexMap[oldVnode.key]
+        if (typeof k !== 'undefined') {
+          newVnode = newChildren[k]
+          patch(newVnode, oldVnode, container)
+          soure[k - newStart] = i
+        } 
+        else {
+          unmount(oldVnode)
         }
       }
-    }
+    } 
   }
     return {
       render

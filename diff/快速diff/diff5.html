@@ -1,14 +1,14 @@
-<!-- 简单的diff -->
-<!-- key的作用2 -->
-<!-- delete -->
+<!-- 算法优化 -->
+<!-- hashmap 空间换时间将O^2 -> O -->
+<!-- move -->
 <div id="app"></div>
-<script src="../../js/reactivity.js"  ></script>
+<script src="../../js/reactivity.js"></script>
 <script>
-  
-const Comment = Symbol()
-const Fragment = Symbol()
 
-const BSApi = {
+  const Comment = Symbol()
+  const Fragment = Symbol()
+
+  const BSApi = {
     createElement(tag) {
       return document.createElement(tag)
     },
@@ -34,15 +34,15 @@ const BSApi = {
   }
 
   function createRenderer(options) {
-    const { 
+    const {
       createElement,
       insert,
       setElementText,
       createText,
       setText,
       createComment
-      }  = options
-    function render(vnode,container) {
+    } = options
+    function render(vnode, container) {
       // 挂载
       if (vnode) {
         patch(container._vnode, vnode, container)
@@ -70,7 +70,7 @@ const BSApi = {
       // n2.type 是string， 它就是普通的标签
       if (typeof type === "string") {
         if (!n1) {
-        mountElement(n2, container, anchor)
+          mountElement(n2, container, anchor)
         }
         else {
           patchElement(n1, n2)
@@ -92,8 +92,8 @@ const BSApi = {
           }
         }
       }
-      else if ( type === Comment) {
-        if(!n1) {
+      else if (type === Comment) {
+        if (!n1) {
           const el = n2.el = createComment(n2.children)
           insert(el, container, anchor)
         }
@@ -104,9 +104,9 @@ const BSApi = {
           }
         }
       }
-      else if ( type === Fragment) {
-        if(!n1) {
-         n2.children.forEach(c => patch(null, c, container))
+      else if (type === Fragment) {
+        if (!n1) {
+          n2.children.forEach(c => patch(null, c, container))
         }
         else {
           patchChildren(n1, n2, container)
@@ -114,7 +114,7 @@ const BSApi = {
       }
     }
 
-    function patchProps(el, key, prevValue, nextValue) { 
+    function patchProps(el, key, prevValue, nextValue) {
       /** 对class进行处理 性能优化 */
       if (key === 'class') {
         el.className = nextValue || ''
@@ -125,7 +125,7 @@ const BSApi = {
         let invoker = invokers[key]
         const name = key.slice(2).toLowerCase()
         if (nextValue) {
-          
+
           if (!invoker) {
             invoker = el._vei[key] = (e) => {
               // 如果事件发生的时间早于事件处理函数绑定的时间，则不执行事件
@@ -147,12 +147,12 @@ const BSApi = {
           }
         }
         else if (invoker) {
-          el.removeEventListener(name,invoker)
+          el.removeEventListener(name, invoker)
         }
       }
       else if (shouldSetAsProps(el, key, nextValue)) {
         const type = typeof el[key]
-        if (type ==="boolean" && nextValue === '') {
+        if (type === "boolean" && nextValue === '') {
           el[key] = true
         }
         else {
@@ -163,7 +163,7 @@ const BSApi = {
         el.setAttribute(key, nextValue)
       }
     }
-  
+
     function patchElement(n1, n2) {
       // 引用真实dom
       const el = n2.el = n1.el
@@ -210,7 +210,7 @@ const BSApi = {
         }
       }
     }
-    
+
     function unmount(vnode) {
       if (vnode.type === Fragment) {
         vnode.children.forEach(c => unmount(c))
@@ -227,7 +227,7 @@ const BSApi = {
       const el = vnode.el = createElement(vnode.type)
       if (typeof vnode.children === 'string') {
         setElementText(el, vnode.children)
-      } 
+      }
       else if (Array.isArray(vnode.children)) {
         vnode.children.forEach(child => {
           patch(null, child, el)
@@ -242,105 +242,199 @@ const BSApi = {
     }
 
     function patchKeyedChildren(n1, n2, container) {
-    let oldChildren = n1.children
-    let newChildren = n2.children
-    let j = 0
-    let oldVnode = oldChildren[j]
-    let newVnode = newChildren[j]
-    console.log(oldVnode, newVnode);
-    while (oldVnode.key === newVnode.key) {
-      patch(oldVnode,newVnode,container)
-      j++
-      oldVnode = oldChildren[j]
-      newVnode = newChildren[j]
-    }
-    let oldEnd = oldChildren.length - 1
-    let newEnd = newChildren.length - 1
-    oldVnode = oldChildren[oldEnd]
-    newVnode = newChildren[newEnd]
-
-    while(oldVnode.key === newVnode.key) {
-      patch(oldVnode,newVnode,container)
-      oldEnd--
-      newEnd--
+      let oldChildren = n1.children
+      let newChildren = n2.children
+      let j = 0
+      let oldVnode = oldChildren[j]
+      let newVnode = newChildren[j]
+      console.log(oldVnode, newVnode);
+      while (oldVnode.key === newVnode.key) {
+        patch(oldVnode, newVnode, container)
+        j++
+        oldVnode = oldChildren[j]
+        newVnode = newChildren[j]
+      }
+      let oldEnd = oldChildren.length - 1
+      let newEnd = newChildren.length - 1
       oldVnode = oldChildren[oldEnd]
       newVnode = newChildren[newEnd]
-    }
-    console.log(j,newEnd,oldEnd);
-    // add
-    if (j <= newEnd && j > oldEnd) {
-      // 找到参考插入的位置
-      const anchorIndex = newEnd + 1
-      const anchor = anchorIndex < newChildren.length 
-        ? newChildren[anchorIndex].el
-        : null
-      while(j <= newEnd) {
-        patch(null, newChildren[j++], container, anchor)
+
+      while (oldVnode.key === newVnode.key) {
+        patch(oldVnode, newVnode, container)
+        oldEnd--
+        newEnd--
+        oldVnode = oldChildren[oldEnd]
+        newVnode = newChildren[newEnd]
       }
-    }
-    // delete
-    else if (j > newEnd && j <= oldEnd) {
-      while (j <= oldEnd) {
-        unmount(oldChildren[j++])
+      console.log(j, newEnd, oldEnd);
+      // add
+      if (j <= newEnd && j > oldEnd) {
+        // 找到参考插入的位置
+        const anchorIndex = newEnd + 1
+        const anchor = anchorIndex < newChildren.length
+          ? newChildren[anchorIndex].el
+          : null
+        while (j <= newEnd) {
+          patch(null, newChildren[j++], container, anchor)
+        }
       }
-    }
-    // 非理想情况下
-    else {
-      const count = newEnd - j + 1
-      const soure = new Array(count)
-      soure.fill(-1)
-      const oldStart = j
-      const newStart = j
-      for (let i = oldstart; i<= oldEnd; i++) {
-        const oldVnode = oldChildren[i]
-        for (let k = newStart; k<=newEnd; k++) {
-          const newVnode = newChildren[k]
-          if (oldVnode.key === newVnode.key) {
-            // 打补丁
-            patch(oldVnode, newVnode, container)
-            source[k - newStart] = i
+      // delete
+      else if (j > newEnd && j <= oldEnd) {
+        while (j <= oldEnd) {
+          unmount(oldChildren[j++])
+        }
+      }
+      // 非理想情况下 todo bug need fix
+      else {
+        const count = newEnd - j + 1
+        const soure = new Array(count)
+        soure.fill(-1)
+        const oldStart = j
+        const newStart = j
+        let moved = false
+        let positon = 0
+        let patched = 0 // update node numbers
+        // hashmap key => index
+        const indexMap = {}
+        for (let i = newStart; i <= newEnd; i++) {
+          const newVnode = newChildren[i]
+          indexMap[newVnode.key] = i
+        }
+        for (let i = oldStart; i <= oldEnd; i++) {
+          oldVnode = oldChildren[i]
+          if (patched <= count) {
+            const k = indexMap[oldVnode.key]
+            if (typeof k !== 'undefined') {
+              newVnode = newChildren[k]
+              patch(newVnode, oldVnode, container)
+              patched++
+              soure[k - newStart] = i
+              // move?
+              if (k < positon) {
+                moved = true
+              }
+              else {
+                positon = k
+              }
+            }
+            else {
+              unmount(oldVnode)
+            }
+          }
+          else {
+            unmount(oldVnode)
+          }
+        }
+        if (moved) {
+          const seq = getSequence[soure]
+          let s = seq.length - 1
+          let i = count - 1
+          for (i; i>=0; i--) {
+            if (soure[i] === -1) {
+              const pos = i + newStart
+              const newVnode = newChildren[pos]
+              const nextPos = pos + 1
+              const anchor = nextPos < newChildren.length
+                ? newChildren[nextPos].el
+                : null
+              patch(null, newVnode, container, anchor)
+            }
+            else if (i !== seq[j]) {
+              // need move
+              const pos = i + newStart
+              const newVnode = newChildren[pos]
+              const nextPos = pos + 1
+              const anchor = nextPos < newChildren.length
+                ? newChildren[nextPos].el
+                : null
+              insert(newVnode.el, container, anchor)
+            }
+            else {
+              s--
+            }
           }
         }
       }
     }
-  }
+    // 递增子序列的求法
+    function getSequence(arr) {
+      const p = arr.slice()
+      const result = [0]
+      let i, j, u, v, c
+      const len = arr.length
+      for (i = 0; i < len; i++) {
+        const arrI = arr[i]
+        if (arrI !== 0) {
+          j = result[result.length - 1]
+          if (arr[j] < arrI) {
+            p[i] = j
+            result.push(i)
+            continue
+          }
+          u = 0
+          v = result.length - 1
+          while (u < v) {
+            c = ((u + v) / 2) | 0
+            if (arr[result[c] < arrI]) {
+              u = c + 1
+            }
+            else {
+              v = c
+            }
+          }
+          if (arrI < arr[result[u]]) {
+            if (u > 0) {
+              p[i] = result[u - 1]
+            }
+            result[u] = i
+          }
+        }
+      }
+      u = result.length
+      v = result[u - 1]
+      while (u-- > 0) {
+        result[u] = v
+        v = p[v]
+      }
+      return result
+    }
     return {
       render
     }
   }
 
 
-const renderer = createRenderer(BSApi)
+  const renderer = createRenderer(BSApi)
 
-const oldVnode = {
-  type: 'div',
-  children: [
-    { type: 'p', children: '1', key: 1 },
-    { type: 'p', children: '2', key: 2 },
-    { type: 'p', children: '3', key: 3 },
-    { type: 'p', children: '4', key: 4 },
-    { type: 'p', children: '5', key: 5 },
-    { type: 'p', children: '6', key: 6 },
+  const oldVnode = {
+    type: 'div',
+    children: [
+      { type: 'p', children: '1', key: 1 },
+      { type: 'p', children: '2', key: 2 },
+      { type: 'p', children: '3', key: 3 },
+      { type: 'p', children: '4', key: 4 },
+      { type: 'p', children: '5', key: 5 },
+      { type: 'p', children: '6', key: 6 },
 
-  ]
-}
-const newVnode = {
-  type: 'div',
-  children: [
-    { type: 'p', children: '1', key: 1 },
-    { type: 'p', children: '3', key: 3 },
-    { type: 'p', children: '4', key: 4 },
-    { type: 'p', children: '2', key: 2 },
-    { type: 'p', children: '7', key: 7 },
-    { type: 'p', children: '5', key: 5 },
-  ]
-}
-renderer.render(oldVnode, document.querySelector('#app'))
+    ]
+  }
+  const newVnode = {
+    type: 'div',
+    children: [
+      { type: 'p', children: '1', key: 1 },
+      { type: 'p', children: '3', key: 3 },
+      { type: 'p', children: '4', key: 4 },
+      { type: 'p', children: '2', key: 2 },
+      { type: 'p', children: '7', key: 7 },
+      { type: 'p', children: '5', key: 5 },
+    ]
+  }
+  renderer.render(oldVnode, document.querySelector('#app'))
 
-setTimeout(() => {
-  console.log('update')
-  renderer.render(newVnode, document.querySelector('#app'))
-}, 1000);
+  setTimeout(() => {
+    console.log('update')
+    renderer.render(newVnode, document.querySelector('#app'))
+  }, 1000);
 
 
 

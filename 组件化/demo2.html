@@ -1,10 +1,32 @@
-<!-- 简单的diff -->
-<!-- key的作用2 -->
-<!-- delete -->
+<!-- 组件化 -->
+<!-- 组件状态与自更新 -->
 <div id="app"></div>
-<script src="../../js/reactivity.js"  ></script>
+<script src="../js/reactivity.js"  ></script>
+
 <script>
-  
+  /** 调度器 scheduler*/
+const queue = new Set()
+let isFlushing = false
+const p =  Promise.resolve()
+
+function queueJob(job) {
+  queue.add(job)
+  if (!isFlushing) {
+    isFlushing = true
+    p.then(() => {
+      try {
+        queue.forEach(job => job())
+      }
+      finally {
+        isFlushing = false
+        queue.clear = 0
+      }
+    })
+  }
+}
+/**     */
+const { reactive, effect } = VueReactivity
+
 const Comment = Symbol()
 const Fragment = Symbol()
 
@@ -78,6 +100,12 @@ const BSApi = {
       }
       else if (typeof type === 'object') {
         // 处理组件
+        if (!n1) {
+          mountComponent(n2, container, anchor)
+        }
+        else {
+          patchComponent(n1, n2, anchor)
+        }
       }
       else if (typeof type === 'Text') {
         // 处理Text类型的vnode
@@ -240,70 +268,97 @@ const BSApi = {
       }
       insert(el, container, anchor)
     }
-
+    
+    function mountComponent(vnode, container, anchor) {
+      const componentOptions = vnode.type
+      const { render, data } = componentOptions
+      const state = reactive(data())
+      effect(() => {
+        const subTree = render.call(state, state)
+        patch(null, subTree, container, anchor)
+      }, {
+        scheduler: queueJob
+      })
+    }
+    
     function patchKeyedChildren(n1, n2, container) {
-    let oldChildren = n1.children
-    let newChildren = n2.children
-    let j = 0
-    let oldVnode = oldChildren[j]
-    let newVnode = newChildren[j]
-    console.log(oldVnode, newVnode);
-    while (oldVnode.key === newVnode.key) {
-      patch(oldVnode,newVnode,container)
-      j++
-      oldVnode = oldChildren[j]
-      newVnode = newChildren[j]
-    }
-    let oldEnd = oldChildren.length - 1
-    let newEnd = newChildren.length - 1
-    oldVnode = oldChildren[oldEnd]
-    newVnode = newChildren[newEnd]
-
-    while(oldVnode.key === newVnode.key) {
-      patch(oldVnode,newVnode,container)
-      oldEnd--
-      newEnd--
-      oldVnode = oldChildren[oldEnd]
-      newVnode = newChildren[newEnd]
-    }
-    console.log(j,newEnd,oldEnd);
-    // add
-    if (j <= newEnd && j > oldEnd) {
-      // 找到参考插入的位置
-      const anchorIndex = newEnd + 1
-      const anchor = anchorIndex < newChildren.length 
-        ? newChildren[anchorIndex].el
-        : null
-      while(j <= newEnd) {
-        patch(null, newChildren[j++], container, anchor)
-      }
-    }
-    // delete
-    else if (j > newEnd && j <= oldEnd) {
-      while (j <= oldEnd) {
-        unmount(oldChildren[j++])
-      }
-    }
-    // 非理想情况下
-    else {
-      const count = newEnd - j + 1
-      const soure = new Array(count)
-      soure.fill(-1)
-      const oldStart = j
-      const newStart = j
-      for (let i = oldstart; i<= oldEnd; i++) {
-        const oldVnode = oldChildren[i]
-        for (let k = newStart; k<=newEnd; k++) {
-          const newVnode = newChildren[k]
-          if (oldVnode.key === newVnode.key) {
-            // 打补丁
-            patch(oldVnode, newVnode, container)
-            source[k - newStart] = i
+      const oldChildren = n1.children
+      const newChildren = n2.children
+      let oldStartIdx = 0
+      let oldEndIdx = oldChildren.length - 1
+      let newStartIdx = 0
+      let newEndIdx = newChildren.length - 1
+      let oldStartVnode = oldChildren[oldStartIdx]
+      let oldEndVnode = oldChildren[oldEndIdx]
+      let newStartVnode = newChildren[newStartIdx]
+      let newEndVnode = newChildren[newEndIdx]
+      while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
+        if (!oldStartVnode) {
+          oldStartVnode = oldChildren[++oldStartIdx]
+        }
+        else if (!oldEndVnode) {
+          oldEndVnode = oldChildren[--oldEndIdx]
+        }
+        else if (oldStartVnode.key === newStartVnode.key) {
+          console.log('start start','index: ', oldStartIdx, newStartIdx);
+          patch(oldStartVnode, newStartVnode, container)
+          oldStartVnode = oldChildren[++oldStartIdx]
+          newStartVnode = newChildren[++newStartIdx]
+        }
+        else if (oldEndVnode.key === newEndVnode.key) {
+          console.log('end end','index: ', oldEndIdx, newEndIdx);
+          patch(oldEndVnode,newEndVnode,container)
+          oldEndVnode = oldChildren[--oldEndIdx]
+          newEndVnode = newChildren[--newEndIdx]
+        }
+        else if (oldStartVnode.key === newEndVnode.key) {
+          console.log('start end','index: ', oldStartIdx, newEndIdx);
+          patch(oldStartVnode, newEndVnode, container)
+          insert(oldStartVnode.el, container, oldEndVnode.el.nextSibling)
+          oldStartVnode = oldChildren[++oldStartIdx]
+          newEndVnode = newChildren[--newEndIdx]
+        }
+        else if (oldEndVnode.key === newStartVnode.key) {
+          console.log('end start','index: ', oldEndIdx, newStartIdx);
+          patch(oldEndVnode, newStartVnode, container)
+          // console.log(oldEndVnode.el, newStartVnode.el);
+          insert(oldEndVnode.el, container, oldStartVnode.el)
+          oldEndVnode = oldChildren[--oldEndIdx]
+          newStartVnode = newChildren[++newStartIdx]
+        }
+        else {
+          // 便利旧的一组子节点，试图找到与newStartVnode拥有相同key的vnode
+          const idxInOld = oldChildren.findIndex(
+            vnode => vnode.key === newStartVnode.key
+          )
+          if (idxInOld > 0) {
+            const vnodeToMove = oldChildren[idxInOld]
+            patch(vnodeToMove, newStartVnode, container)
+            console.log(oldStartVnode.el);
+            insert(vnodeToMove.el, container, oldStartVnode.el)
+            oldChildren[idxInOld] = undefined
           }
+          else {
+            // add
+            patch(null, newStartVnode, container, oldStartVnode.el)
+          }
+          newStartVnode = newChildren[++newStartIdx]
+        }
+      }
+      // 检查有没有要挂载的节点 add
+      if (oldEndIdx < oldStartIdx && newStartIdx <= newEndIdx) {
+        for (let i = newStartIdx; i <= newEndIdx; i++) {
+          patch(null, newChildren[i], container, oldStartVnode.el)
+        }
+      }
+      // delete
+      else if (newEndIdx < newStartIdx && oldStartIdx <= oldEndIdx) {
+        for (let i = oldStartIdx; i <= oldEndIdx;i++) {
+          unmount(oldChildren[i])
         }
       }
     }
-  }
+
     return {
       render
     }
@@ -312,36 +367,23 @@ const BSApi = {
 
 const renderer = createRenderer(BSApi)
 
-const oldVnode = {
-  type: 'div',
-  children: [
-    { type: 'p', children: '1', key: 1 },
-    { type: 'p', children: '2', key: 2 },
-    { type: 'p', children: '3', key: 3 },
-    { type: 'p', children: '4', key: 4 },
-    { type: 'p', children: '5', key: 5 },
-    { type: 'p', children: '6', key: 6 },
-
-  ]
+const MyComponent = {
+  name: 'MyComponent',
+  data() {
+    return {
+      foo: 'hello world'
+    }
+  }, 
+  render() {
+    return {
+      type: 'div',
+      children: `foo的值是${this.foo}`
+    }
+  }
 }
-const newVnode = {
-  type: 'div',
-  children: [
-    { type: 'p', children: '1', key: 1 },
-    { type: 'p', children: '3', key: 3 },
-    { type: 'p', children: '4', key: 4 },
-    { type: 'p', children: '2', key: 2 },
-    { type: 'p', children: '7', key: 7 },
-    { type: 'p', children: '5', key: 5 },
-  ]
+
+const vnode = {
+  type: MyComponent
 }
-renderer.render(oldVnode, document.querySelector('#app'))
-
-setTimeout(() => {
-  console.log('update')
-  renderer.render(newVnode, document.querySelector('#app'))
-}, 1000);
-
-
-
+renderer.render(vnode, document.querySelector('#app'))
 </script>

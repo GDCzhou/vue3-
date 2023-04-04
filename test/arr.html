@@ -1,0 +1,21 @@
+<script>
+  const a = {
+    a: 1
+  }
+  const b = {
+    b: 2
+  }
+  function relove(a,b) {
+    const props = {}
+    const attrs = {}
+    for (const key in a) {
+      props[key] = a[key]
+    }
+    for (const key in b) {
+      attrs[key] = b[key]
+    }
+    return [props, attrs]
+  }
+  const [nextProps,props] = relove(a,b)
+  console.log(nextProps,props);
+</script>
