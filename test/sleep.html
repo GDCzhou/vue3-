@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <script>
+    function sleep(num) {
+      return new Promise(resolve => setTimeout(resolve,num*1000))
+    }
+
+    async function timeSleep() {
+      await sleep(2)
+      console.log(222);
+    }
+    timeSleep()
+    console.log(111);
+
+    function* sleep1(seconds) {
+      const start = new Date()
+      while(new Date()-start < seconds * 1000) {
+        // yield
+      }
+    }
+    function testSleep() {
+      console.log('start');
+      for (const _ of sleep1(2)) {
+       
+      }
+      console.log('end');
+    }
+    testSleep()
+  </script>
+</body>
+</html>
